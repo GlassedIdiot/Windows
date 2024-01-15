@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
 
     // Variable Declarations.
     HMODULE mydll = NULL;
-    wchar_t path_to_dll[MAX_PATH] = L"E:\\Shit\\Windows\\Injections\\awsome.dll";
+    wchar_t path_to_dll[MAX_PATH] = L"your-path";
     DWORD PID = NULL, TID = NULL;
     LPVOID rBuffer = NULL;
     HANDLE rProcess = NULL, rThread = NULL;
