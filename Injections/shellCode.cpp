@@ -103,7 +103,7 @@ LPVOID allocateMemoryInTargetProcess(HANDLE hProcess, size_t size)
         cout << n << "The buffer was not allocated. With the following error." << GetLastError();
         exit(EXIT_FAILURE);
     }
-    cout << k << "The buffer was allocated with the following memory size in bytes: " << size;
+    cout << k << "The buffer was allocated with the following memory size in bytes: " << size << endl;
 
     return remoteBuffer;
 }
